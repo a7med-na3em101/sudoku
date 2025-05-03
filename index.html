@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sudoku Game</title>
+  </head>
+  <body>
+    <div
+      id="menuScreen"
+      style="
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+      "
+    >
+      <h1>Sudoku Game</h1>
+      <button
+        id="startBtn"
+        style="
+          margin: 10px;
+          padding: 15px 30px;
+          font-size: 18px;
+          cursor: pointer;
+          background-color: green;
+          color: white;
+        "
+      >
+        Start Game
+      </button>
+      <button
+        id="howToPlayBtn"
+        style="
+          margin: 10px;
+          padding: 15px 30px;
+          font-size: 18px;
+           background-color: yellowgreen;
+          color: white;
+          cursor: pointer;
+        "
+      >
+        How to Play
+      </button>
+    </div>
+
+    <div
+      id="gameScreen"
+      style="
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+      "
+    >
+      <canvas
+        id="sudokuCanvas"
+        width="450"
+        height="450"
+        style="border: 1px solid #333"
+      ></canvas>
+      <div style="margin-top: 20px">
+        <span id="timer" style="font-size: 18px; margin-right: 20px"
+          >Time: 0s</span
+        >
+        <span id="mistakes" style="font-size: 18px">Mistakes: 0/3</span>
+      </div>
+      <div style="margin-top: 20px">
+        <button
+          id="checkBtn"
+          style="
+            margin: 5px;
+            padding: 10px 20px;
+            font-size: 16px;
+             background-color: red;
+          color: white;
+            cursor: pointer;
+          "
+        >
+          Check
+        </button>
+        <button
+          id="resetBtn"
+          style="
+            margin: 5px;
+            padding: 10px 20px;
+            font-size: 16px;
+             background-color: blue;
+          color: white;
+            cursor: pointer;
+          "
+        >
+          Reset
+        </button>
+        <button
+          id="backBtn"
+          style="
+            margin: 5px;
+            padding: 10px 20px;
+            font-size: 16px;
+             background-color: violet;
+          color: white;
+            cursor: pointer;
+          "
+        >
+          Back to Menu
+        </button>
+      </div>
+      <div id="numberPalette" style="display: flex; margin-top: 20px"></div>
+      <div
+        id="messageBox"
+        style="margin-top: 20px; font-size: 18px; color: #333"
+      ></div>
+    </div>
+
+    <div
+      id="howToPlayScreen"
+      style="
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+      "
+    >
+      <h1>How to Play Sudoku</h1>
+      <div style="max-width: 600px; text-align: center; margin-bottom: 30px">
+        <p>
+          1. Fill the grid so that every row, column, and 3x3 box contains the
+          digits 1-9 without repeating.
+        </p>
+        <p>2. Drag numbers from the palette at the bottom to empty cells.</p>
+        <p>3. You get 3 mistakes before the game ends.</p>
+        <p>4. Click "Check" to verify your solution.</p>
+      </div>
+      <button
+        id="backFromHelpBtn"
+        style="padding: 15px 30px; font-size: 18px;  background-color: blueviolet;
+          color: white; cursor: pointer"
+      >
+        Back to Menu
+      </button>
+    </div>
+
+    <script>
+      // Game state
+      const gameState = {
+        puzzle: [],
+        mistakes: 0,
+        timer: 0,
+        timerInterval: null,
+        gameOver: false,
+        selectedNumber: null,
+        dragging: false,
+        dragNumber: null,
+        canvas: null,
+        ctx: null,
+        cellSize: 50,
+        boardOffset: 25,
+        paletteOffsetY: 500,
+      };
+
+      // DOM elements
+      const menuScreen = document.getElementById("menuScreen");
+      const gameScreen = document.getElementById("gameScreen");
+      const howToPlayScreen = document.getElementById("howToPlayScreen");
+      const sudokuCanvas = document.getElementById("sudokuCanvas");
+      const numberPalette = document.getElementById("numberPalette");
+      const timerDisplay = document.getElementById("timer");
+      const mistakesDisplay = document.getElementById("mistakes");
+      const messageBox = document.getElementById("messageBox");
+
+      // Initialize canvas
+      function initCanvas() {
+        gameState.canvas = sudokuCanvas;
+        gameState.ctx = sudokuCanvas.getContext("2d");
+        gameState.cellSize = 50;
+        gameState.boardOffset = 25;
+        gameState.paletteOffsetY = 500;
+
+        // Set canvas size
+        sudokuCanvas.width = 500;
+        sudokuCanvas.height = 600;
+
+        // Add event listeners
+        sudokuCanvas.addEventListener("mousedown", handleCanvasMouseDown);
+        sudokuCanvas.addEventListener("mousemove", handleCanvasMouseMove);
+        sudokuCanvas.addEventListener("mouseup", handleCanvasMouseUp);
+        sudokuCanvas.addEventListener("mouseleave", handleCanvasMouseLeave);
+      }
+
+      // Generate a Sudoku puzzle
+      function generatePuzzle() {
+        // This is a medium difficulty puzzle
+        const basePuzzle = [
+          [0, 2, 8, 1, 3, 4, 0, 0, 9],
+          [8, 0, 0, 7, 3, 2, 5, 0, 0],
+          [0, 0, 4, 0, 0, 8, 7, 0, 0],
+          [0, 9, 7, 0, 0, 1, 3, 0, 2],
+          [1, 0, 0, 0, 3, 0, 0, 0, 0],
+          [5, 8, 3, 1, 9, 0, 0, 0, 0],
+          [9, 0, 0, 5, 6, 0, 0, 0, 7],
+          [6, 7, 8, 3, 0, 0, 9, 1, 0],
+          [0, 0, 0, 0, 0, 0, 8, 3, 0],
+        ];
+
+        // Randomly shuffle rows and columns for variety
+        function shuffleRows(puzzle) {
+          const newPuzzle = [...puzzle];
+          for (let band = 0; band < 3; band++) {
+            const rows = newPuzzle.slice(band * 3, band * 3 + 3);
+            rows.sort(() => Math.random() - 0.5);
+            for (let i = 0; i < 3; i++) {
+              newPuzzle[band * 3 + i] = rows[i];
+            }
+          }
+          return newPuzzle;
+        }
+
+        function shuffleCols(puzzle) {
+          const newPuzzle = puzzle.map((row) => [...row]);
+          for (let stack = 0; stack < 3; stack++) {
+            const cols = [0, 1, 2].map((i) => stack * 3 + i);
+            const shuffled = [...cols].sort(() => Math.random() - 0.5);
+
+            newPuzzle.forEach((row) => {
+              const temp = [...row];
+              for (let i = 0; i < 3; i++) {
+                row[cols[i]] = temp[shuffled[i]];
+              }
+            });
+          }
+          return newPuzzle;
+        }
+
+        let shuffled = shuffleRows(basePuzzle);
+        shuffled = shuffleCols(shuffled);
+        return shuffled;
+      }
+
+      // Draw the Sudoku board
+      function drawBoard() {
+        const { ctx, cellSize, boardOffset } = gameState;
+
+        // Clear canvas
+        ctx.clearRect(0, 0, gameState.canvas.width, gameState.canvas.height);
+
+        // Draw background
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, gameState.canvas.width, gameState.canvas.height);
+
+        // Draw grid lines
+        ctx.strokeStyle = "#333";
+        ctx.lineWidth = 2;
+
+        // Draw thick lines for 3x3 boxes
+        for (let i = 0; i <= 9; i++) {
+          const pos = boardOffset + i * cellSize;
+
+          if (i % 3 === 0) {
+            ctx.lineWidth = 3;
+          } else {
+            ctx.lineWidth = 1;
+          }
+
+          // Vertical lines
+          ctx.beginPath();
+          ctx.moveTo(pos, boardOffset);
+          ctx.lineTo(pos, boardOffset + 9 * cellSize);
+          ctx.stroke();
+
+          // Horizontal lines
+          ctx.beginPath();
+          ctx.moveTo(boardOffset, pos);
+          ctx.lineTo(boardOffset + 9 * cellSize, pos);
+          ctx.stroke();
+        }
+
+        // Draw numbers
+        ctx.font = "24px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        for (let row = 0; row < 9; row++) {
+          for (let col = 0; col < 9; col++) {
+            const value = gameState.puzzle[row][col];
+            if (value !== 0) {
+              const x = boardOffset + col * cellSize + cellSize / 2;
+              const y = boardOffset + row * cellSize + cellSize / 2;
+
+              // Prefilled numbers are darker
+              ctx.fillStyle = "#333";
+              ctx.fillText(value.toString(), x, y);
+            }
+          }
+        }
+
+        // Draw selected cell
+        if (gameState.selectedNumber) {
+          const { row, col } = gameState.selectedNumber;
+          ctx.strokeStyle = "#007bff";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(
+            boardOffset + col * cellSize + 1,
+            boardOffset + row * cellSize + 1,
+            cellSize - 2,
+            cellSize - 2
+          );
+        }
+
+        // Draw number palette
+        drawNumberPalette();
+
+        // Draw dragging number
+        if (gameState.dragging && gameState.dragNumber) {
+          ctx.fillStyle = "#007bff";
+          ctx.font = "24px Arial";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(
+            gameState.dragNumber.toString(),
+            gameState.dragX,
+            gameState.dragY
+          );
+        }
+      }
+
+      // Draw number palette at the bottom
+      function drawNumberPalette() {
+        const { ctx, cellSize, boardOffset, paletteOffsetY } = gameState;
+
+        // Draw palette background
+        ctx.fillStyle = "#f0f0f0";
+        ctx.fillRect(boardOffset, paletteOffsetY, 9 * cellSize, cellSize + 20);
+
+        // Draw palette numbers
+        ctx.fillStyle = "#007bff";
+        ctx.font = "24px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        for (let i = 1; i <= 9; i++) {
+          const x = boardOffset + (i - 0.5) * cellSize;
+          const y = paletteOffsetY + cellSize / 2;
+
+          ctx.beginPath();
+          ctx.arc(x, y, cellSize / 2 - 5, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText(i.toString(), x, y);
+          ctx.fillStyle = "#007bff";
+        }
+      }
+
+      // Handle mouse down on canvas
+      function handleCanvasMouseDown(e) {
+        if (gameState.gameOver) return;
+
+        const { boardOffset, cellSize, paletteOffsetY } = gameState;
+        const rect = gameState.canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        // Check if click is on the board
+        if (
+          y >= boardOffset &&
+          y <= boardOffset + 9 * cellSize &&
+          x >= boardOffset &&
+          x <= boardOffset + 9 * cellSize
+        ) {
+          const col = Math.floor((x - boardOffset) / cellSize);
+          const row = Math.floor((y - boardOffset) / cellSize);
+
+          // Only select empty cells
+          if (gameState.puzzle[row][col] === 0) {
+            gameState.selectedNumber = { row, col };
+            drawBoard();
+          }
+        }
+        // Check if click is on number palette
+        else if (
+          y >= paletteOffsetY &&
+          y <= paletteOffsetY + cellSize &&
+          x >= boardOffset &&
+          x <= boardOffset + 9 * cellSize
+        ) {
+          const num = Math.floor((x - boardOffset) / cellSize) + 1;
+          gameState.dragging = true;
+          gameState.dragNumber = num;
+          gameState.dragX = x;
+          gameState.dragY = y;
+          drawBoard();
+        }
+      }
+
+      // Handle mouse move on canvas
+      function handleCanvasMouseMove(e) {
+        if (gameState.dragging) {
+          const rect = gameState.canvas.getBoundingClientRect();
+          gameState.dragX = e.clientX - rect.left;
+          gameState.dragY = e.clientY - rect.top;
+          drawBoard();
+        }
+      }
+
+      // Handle mouse up on canvas
+      function handleCanvasMouseUp(e) {
+        if (
+          gameState.dragging &&
+          gameState.dragNumber &&
+          gameState.selectedNumber
+        ) {
+          const { row, col } = gameState.selectedNumber;
+          const num = gameState.dragNumber;
+
+          if (isValidMove(row, col, num)) {
+            gameState.puzzle[row][col] = num;
+          } else {
+            gameState.mistakes++;
+            updateMistakes();
+            showMessage("Incorrect move!", "#f8d7da");
+          }
+
+          drawBoard();
+        }
+
+        gameState.dragging = false;
+        gameState.dragNumber = null;
+      }
+
+      // Handle mouse leaving canvas
+      function handleCanvasMouseLeave() {
+        gameState.dragging = false;
+        gameState.dragNumber = null;
+        drawBoard();
+      }
+
+      // Check if a move is valid
+      function isValidMove(row, col, num) {
+        // Check row
+        for (let c = 0; c < 9; c++) {
+          if (c !== col && gameState.puzzle[row][c] === num) return false;
+        }
+
+        // Check column
+        for (let r = 0; r < 9; r++) {
+          if (r !== row && gameState.puzzle[r][col] === num) return false;
+        }
+
+        // Check 3x3 box
+        const boxRow = Math.floor(row / 3) * 3;
+        const boxCol = Math.floor(col / 3) * 3;
+
+        for (let r = boxRow; r < boxRow + 3; r++) {
+          for (let c = boxCol; c < boxCol + 3; c++) {
+            if (r !== row && c !== col && gameState.puzzle[r][c] === num)
+              return false;
+          }
+        }
+
+        return true;
+      }
+
+      // Update mistakes display
+      function updateMistakes() {
+        mistakesDisplay.textContent = `Mistakes: ${gameState.mistakes}/3`;
+        if (gameState.mistakes >= 3) {
+          gameState.gameOver = true;
+          window.location.href = "gameover.html";
+          clearInterval(gameState.timerInterval);
+          showMessage("Game Over! Too many mistakes.", "#f8d7da");
+        }
+      }
+
+      // Show a message
+      function showMessage(message, color) {
+        messageBox.textContent = message;
+        messageBox.style.backgroundColor = color || "#f0f0f0";
+        messageBox.style.padding = "10px";
+        messageBox.style.borderRadius = "5px";
+        setTimeout(() => {
+          messageBox.textContent = "";
+          messageBox.style.backgroundColor = "";
+          messageBox.style.padding = "0";
+        }, 1500);
+      }
+
+      // Check the solution
+      function checkSolution() {
+        if (gameState.gameOver) return;
+
+        let complete = true;
+        let correct = true;
+
+        for (let row = 0; row < 9; row++) {
+          for (let col = 0; col < 9; col++) {
+            const num = gameState.puzzle[row][col];
+            if (num === 0) {
+              complete = false;
+            } else if (!isValidMove(row, col, num)) {
+              correct = false;
+            }
+          }
+        }
+
+        if (!complete) {
+          showMessage("Puzzle not complete yet!", "#fff3cd");
+        } else if (correct) {
+          gameState.gameOver = true;
+          clearInterval(gameState.timerInterval);
+          showMessage("Congratulations! You solved it!", "#d4edda");
+        } else {
+          showMessage("Solution is incorrect!", "#f8d7da");
+        }
+      }
+
+      // Reset the game
+      function resetGame() {
+        clearInterval(gameState.timerInterval);
+        startGame();
+      }
+
+      // Start the game
+      function startGame() {
+        gameState.puzzle = generatePuzzle();
+        gameState.mistakes = 0;
+        gameState.timer = 0;
+        gameState.gameOver = false;
+        gameState.selectedNumber = null;
+
+        updateMistakes();
+        timerDisplay.textContent = "Time: 0s";
+
+        gameState.timerInterval = setInterval(() => {
+          gameState.timer++;
+          timerDisplay.textContent = `Time: ${gameState.timer}s`;
+        }, 1000);
+
+        drawBoard();
+      }
+
+      // Initialize the game
+      function init() {
+        initCanvas();
+
+        // Set up event listeners for buttons
+        document.getElementById("startBtn").addEventListener("click", () => {
+          menuScreen.style.display = "none";
+          howToPlayScreen.style.display = "none";
+          gameScreen.style.display = "flex";
+          startGame();
+        });
+
+        document
+          .getElementById("howToPlayBtn")
+          .addEventListener("click", () => {
+            menuScreen.style.display = "none";
+            gameScreen.style.display = "none";
+            howToPlayScreen.style.display = "flex";
+          });
+
+        document
+          .getElementById("backFromHelpBtn")
+          .addEventListener("click", () => {
+            howToPlayScreen.style.display = "none";
+            gameScreen.style.display = "none";
+            menuScreen.style.display = "flex";
+          });
+
+        document.getElementById("backBtn").addEventListener("click", () => {
+          clearInterval(gameState.timerInterval);
+          gameScreen.style.display = "none";
+          howToPlayScreen.style.display = "none";
+          menuScreen.style.display = "flex";
+        });
+
+        document
+          .getElementById("checkBtn")
+          .addEventListener("click", checkSolution);
+        document
+          .getElementById("resetBtn")
+          .addEventListener("click", resetGame);
+      }
+
+      // Start the game when page loads
+      window.addEventListener("load", init);
+    </script>
+  </body>
+</html>
